@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Sword of Knowledge: a three-player trivia strategy game. Claim territories, win battles with your knowledge, and capture castles.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<title>Sword of Knowledge</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* Layout: wooden frame holding a player bar, then a parchment world map with a status band. Questions appear in a card stacked over the map. One committed look (aged parchment on dark wood), so colors are set explicitly rather than themed. */
+:root {
+  --wood-1: #3a2213;
+  --wood-2: #5a3820;
+  --wood-3: #7a4f2c;
+  --parch: #ecd9ab;
+  --paper: #f6ead0;
+  --land: #d8b36f;
+  --land-line: #7d5c2e;
+  --ink: #2a1a0e;
+  --gold: #e0a82e;
+  --red: #b8392e;
+  --blue: #2f64a8;
+  --green: #3f8140;
+  --red-t: #c8584c;
+  --blue-t: #5a86c2;
+  --green-t: #62a05c;
+  --font-title: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --font-body: 'Source Sans 3', 'Segoe UI', Tahoma, sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background-color: var(--wood-1);
+  background-image: radial-gradient(ellipse at top, var(--wood-2), var(--wood-1) 70%);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding-block: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.app { max-width: 980px; margin: 0 auto; display: grid; gap: 10px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.title {
+  font-family: var(--font-title);
+  font-size: clamp(24px, 5vw, 38px);
+  letter-spacing: .04em;
+  color: var(--gold);
+  text-shadow: 0 2px 0 #2a1608, 0 0 18px rgba(224, 168, 46, .25);
+  margin: 0;
+  line-height: 1.2;
+}
+.badge { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #2a1a0e; background: var(--gold); padding: 2px 8px; border-radius: 3px; }
+.badge.round { background: #fff1d6; }
+.tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn {
+  font: inherit; font-weight: 700; padding: 8px 18px; min-height: 44px;
+  background: linear-gradient(#e8b84a, #c9962b); border: 2px solid #7a5416; border-radius: 4px;
+  color: #2a1a0e; cursor: pointer;
+}
+.btn:hover { background: linear-gradient(#f0c35c, #d6a237); }
+.btn.ghost { background: transparent; color: #fff1d6; border-color: #a47c3c; padding-inline: 12px; }
+.btn.ghost:hover { background: rgba(255, 241, 214, .1); }
+.btn.ghost[aria-pressed="false"] { opacity: .6; text-decoration: line-through; }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.players { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pcard {
+  background: linear-gradient(var(--wood-3), var(--wood-2));
+  border: 2px solid #2b1a0d; border-inline-start: 7px solid var(--pc);
+  border-radius: 4px; color: #fff1d6; padding: 6px 8px;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  transition: box-shadow .2s, opacity .2s;
+}
+.pcard.active { outline: 3px solid var(--gold); box-shadow: 0 0 16px rgba(224, 168, 46, .65); }
+.pcard.dead { opacity: .45; }
+.avatar {
+  width: 38px; height: 38px; border-radius: 50%; background: var(--pc); flex: none;
+  display: grid; place-items: center; font-weight: 700; color: #fff; border: 2px solid #fff1d6;
+}
+.pinfo { min-width: 0; }
+.pname { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pmeta { font-size: 14px; display: flex; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.score { font-weight: 700; color: #ffd978; }
+.towers { display: inline-flex; gap: 2px; align-items: flex-end; }
+.tw { display: block; width: 8px; height: 13px; background: var(--pc); border: 1px solid #2b1a0d; }
+.tw.off { height: 6px; background: #7d766b; }
+@media (max-width: 520px) {
+  .pcard { flex-direction: column; text-align: center; gap: 4px; }
+  .pmeta { justify-content: center; }
+}
+
+.board {
+  background: var(--parch);
+  border: 6px solid var(--wood-3);
+  border-radius: 6px;
+  box-shadow: 0 0 0 2px #2b1a0d, 0 8px 22px rgba(0, 0, 0, .5);
+  overflow: hidden;
+}
+.status {
+  min-height: 46px; padding: 8px 14px; background: rgba(42, 26, 14, .92); color: #fff1d6;
+  font-weight: 600; text-align: center; display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; gap: 6px; line-height: 1.5;
+}
+.status { flex-direction: column; gap: 2px; }
+.phaseline { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.ptitle { font-family: var(--font-title); font-size: 17px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.pcount { font-weight: 700; font-variant-numeric: tabular-nums; background: rgba(255, 241, 214, .14); padding: 1px 12px; border-radius: 99px; }
+.pwho:empty { display: none; }
+.hint { font-size: 15px; font-weight: 600; color: #fff1d6; }
+.actions { display: flex; justify-content: center; padding: 8px 14px; background: rgba(42, 26, 14, .92); border-top: 1px solid rgba(255, 241, 214, .2); }
+.tag { display: inline-block; background: var(--pc); color: #fff; padding: 0 9px; border-radius: 3px; font-weight: 700; }
+.stage { display: grid; }
+.stage > * { grid-area: 1 / 1; min-width: 0; }
+svg.map { display: block; width: 100%; height: auto; align-self: start; }
+.terr { fill: var(--land); stroke: var(--land-line); stroke-width: 2; stroke-linejoin: round; transition: fill .35s; }
+.terr.o0 { fill: var(--red-t); }
+.terr.o1 { fill: var(--blue-t); }
+.terr.o2 { fill: var(--green-t); }
+.terr.pick { cursor: pointer; stroke: #f5c242; stroke-width: 5; animation: pulse .9s infinite alternate; }
+.terr.pick:hover { filter: brightness(1.3); }
+.terr.target { stroke: #2a1a0e; stroke-width: 5; stroke-dasharray: 10 6; }
+@keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.28); } }
+#marks { pointer-events: none; }
+
+.qwrap {
+  z-index: 2; display: grid; place-items: center; padding: 14px;
+  background: rgba(28, 16, 8, .55);
+}
+.qpanel {
+  width: min(660px, 100%);
+  background: linear-gradient(var(--paper), #ead7ae);
+  border: 5px solid var(--wood-3); outline: 2px solid #2b1a0d;
+  padding: 14px; border-radius: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55);
+}
+.qtop { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; font-weight: 700; }
+.qkind { background: var(--wood-2); color: #fff1d6; padding: 2px 12px; border-radius: 3px; }
+.timer { height: 8px; background: #c9ad78; border-radius: 2px; overflow: hidden; margin-block: 8px 4px; }
+.timer i { display: block; height: 100%; width: 100%; background: var(--gold); }
+.qtext { font-size: clamp(19px, 3.4vw, 25px); line-height: 1.4; margin: 8px 0 12px; font-weight: 700; text-wrap: balance; }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .opts { grid-template-columns: 1fr; } }
+.opt {
+  font: inherit; font-weight: 600; text-align: start; padding: 10px 12px; min-height: 46px;
+  background: #fff7e3; border: 2px solid var(--wood-3); border-radius: 4px; color: var(--ink); cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.opt:hover:not(:disabled) { background: #fff; border-color: var(--gold); }
+.opt:disabled { cursor: default; }
+.who { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.who i { font-style: normal; font-size: 12px; font-weight: 700; color: #fff; background: var(--pc); padding: 0 8px; border-radius: 3px; }
+.opt.right { background: #cfe8c3; border-color: #3f8140; }
+.opt.wrong { background: #f1c5bd; border-color: #b8392e; }
+.numrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.numrow input {
+  flex: 1 1 160px; min-width: 0; font: inherit; font-size: 22px; padding: 8px 12px; min-height: 46px;
+  border: 2px solid var(--wood-3); border-radius: 4px; background: #fff7e3; color: var(--ink);
+  text-align: center; font-variant-numeric: tabular-nums;
+}
+.qnote { margin-top: 10px; font-weight: 700; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.chip { display: inline-flex; gap: 6px; align-items: center; padding: 3px 12px; border-radius: 99px; background: #fff7e3; border: 2px solid var(--pc); font-size: 14px; font-weight: 600; }
+.chip.ok::after { content: "✓"; color: #2f7a31; }
+.chip.no::after { content: "✗"; color: #b8392e; }
+
+.rules { background: rgba(255, 241, 214, .08); border: 1px solid #a47c3c; border-radius: 4px; color: #fff1d6; padding: 8px 14px; }
+.rules summary { cursor: pointer; font-weight: 700; min-height: 32px; display: flex; align-items: center; }
+.rules ul { margin: 8px 0 4px; padding-inline-start: 20px; line-height: 1.65; }
+.rules li + li { margin-top: 6px; }
+.foot { margin: 0; color: #d8bd8c; font-size: 13px; text-align: center; }
+
+.overlay {
+  position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(28, 16, 8, .9);
+  padding: 20px max(20px, env(safe-area-inset-right, 0px)) 20px max(20px, env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+}
+.ocard {
+  width: min(440px, 100%); background: linear-gradient(var(--paper), #ead7ae);
+  border: 5px solid var(--wood-3); outline: 2px solid #2b1a0d; padding: 24px 20px; text-align: center;
+  display: grid; gap: 14px;
+}
+.ocard p { margin: 0; line-height: 1.6; }
+.otitle { font-family: var(--font-title); font-size: clamp(26px, 7vw, 34px); letter-spacing: .03em; margin: 0; color: #7a4a12; line-height: 1.2; }
+.slots { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.slot { padding: 10px 12px; background: #fff7e3; border: 2px dashed #b99a62; border-radius: 4px; color: #7b6642; min-height: 46px; }
+.slot.on { border: 2px solid var(--pc); color: var(--ink); font-weight: 700; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.dot { width: 14px; height: 14px; border-radius: 50%; background: var(--pc); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1 class="title">Sword of Knowledge</h1>
+      <span class="badge">Prototype</span>
+    </div>
+    <div class="tools">
+      <button class="btn ghost" id="musicBtn" type="button" aria-pressed="true">Music</button>
+      <button class="btn ghost" id="sfxBtn" type="button" aria-pressed="true">Effects</button>
+      <button class="btn ghost" id="restartBtn" type="button">New game</button>
+    </div>
+  </header>
+
+  <div class="players" id="players" aria-label="Players"></div>
+
+  <div class="board">
+    <div class="status" id="status" role="status" aria-live="polite">
+      <div class="phaseline"><span class="ptitle" id="ptitle">Lobby</span><span class="pcount" id="pcount"></span><span class="pwho" id="pwho"></span></div>
+      <div class="hint" id="hint" hidden></div>
+    </div>
+    <div class="actions" id="actions" hidden><button class="btn" id="repairBtn" type="button">Repair castle instead</button></div>
+    <div class="stage">
+      <svg class="map" id="map" viewBox="0 0 1000 520" role="img" aria-label="World map divided into twelve territories"></svg>
+      <div class="qwrap" id="qwrap" hidden>
+        <section class="qpanel" id="qpanel" aria-live="polite">
+          <div class="qtop"><span class="qkind" id="qkind"></span><span id="qwho"></span></div>
+          <div class="timer"><i id="tbar"></i></div>
+          <h2 class="qtext" id="qtext"></h2>
+          <div class="opts" id="opts"></div>
+          <form class="numrow" id="numrow" hidden>
+            <input id="numin" type="text" inputmode="decimal" autocomplete="off" aria-label="Your numeric answer" placeholder="Type a number">
+            <button class="btn" type="submit" id="numgo">Confirm</button>
+          </form>
+          <div class="qnote" id="qnote"></div>
+          <div class="chips" id="chips"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <details class="rules">
+    <summary>How to play</summary>
+    <ul>
+      <li>The world has 12 territories. Players place their castles in color order: red, then blue, then green.</li>
+      <li>Claim phase: all three players answer the same question at once. Each correct player claims a free territory next to land they already own. The picking order rotates every round. When fewer than 3 free territories remain, the question becomes numeric and only the closest guess picks.</li>
+      <li>Battle phase: every player gets 5 turns. On your turn, attack a territory next to yours that belongs to an opponent. Attacker and defender answer a question. If only one answers correctly, that player takes or keeps the territory. If both miss, nothing changes. If both are correct, a numeric question decides it and the closest guess wins.</li>
+      <li>Each castle has 3 towers. Every question the attacker wins knocks one down. If the defender wins a question, the attack stops and destroyed towers stay destroyed. A player with a damaged castle can attack as normal. Instead of attacking, they may spend a turn repairing: solo questions, one tower per correct answer, until they miss. Knocking down all three towers captures the castle and every territory its owner holds.</li>
+      <li>Scoring: a castle is worth 1,000 points and every other territory 300. Capturing a castle adds its 1,000 to your score. After the 5th turn of every player, the highest score wins.</li>
+    </ul>
+  </details>
+  <p class="foot">Draft question bank (20 categories), to be reviewed together before launch.</p>
+</div>
+
+<div class="overlay" id="overlay" hidden><div class="ocard" id="ocard"></div></div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var rnd = function (n) { return Math.floor(Math.random() * n); };
+  function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = rnd(i + 1); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  function fmt(n, year) { return year ? String(n) : Number(n).toLocaleString('en'); }
+  function parseNum(s) {
+    s = String(s).replace(/[,\s]/g, '');
+    var n = parseFloat(s);
+    return isFinite(n) ? n : null;
+  }
+
+  /* ---------- Sound: everything is synthesized with Web Audio, no files ---------- */
+  var Snd = (function () {
+    var ctx = null, master, musicBus, sfxBus, delayIn, noiseBuf;
+    var musicOn = true, sfxOn = true, timer = null, nextT = 0, step = 0;
+    var MUSIC_VOL = 0.34, BPM = 124, STEP = 60 / BPM / 4;
+    try {
+      var saved = JSON.parse(localStorage.getItem('sok-sound') || '{}');
+      if (saved.m === false) musicOn = false;
+      if (saved.s === false) sfxOn = false;
+    } catch (e) { }
+    function save() { try { localStorage.setItem('sok-sound', JSON.stringify({ m: musicOn, s: sfxOn })); } catch (e) { } }
+    function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+    // D minor, 8 bars: Dm Bb C Dm | Dm Bb C A
+    var ROOTS = [38, 34, 36, 38, 38, 34, 36, 33];
+    var PADS = [[53, 57, 62], [50, 53, 58], [52, 55, 60], [53, 57, 62], [53, 57, 62], [50, 53, 58], [52, 55, 60], [52, 57, 61]];
+    var MEL = [
+      [0, 74, 4], [4, 77, 2], [6, 76, 2], [8, 74, 4], [12, 69, 4],
+      [16, 70, 4], [20, 74, 2], [22, 72, 2], [24, 70, 4], [28, 77, 4],
+      [32, 79, 4], [36, 76, 2], [38, 74, 2], [40, 72, 4], [44, 76, 4],
+      [48, 74, 6], [54, 72, 2], [56, 74, 4], [60, 69, 4],
+      [64, 74, 4], [68, 77, 2], [70, 81, 2], [72, 79, 4], [76, 77, 4],
+      [80, 74, 4], [84, 77, 2], [86, 74, 2], [88, 70, 4], [92, 74, 4],
+      [96, 76, 4], [100, 79, 2], [102, 76, 2], [104, 72, 4], [108, 67, 4],
+      [112, 69, 2], [114, 73, 2], [116, 76, 4], [120, 81, 4], [124, 76, 4]
+    ];
+    var LEAD = {};
+    MEL.forEach(function (n) { LEAD[n[0]] = n; });
+
+    function noiseSrc(t, dur) {
+      var s = ctx.createBufferSource(); s.buffer = noiseBuf;
+      s.start(t, Math.random() * 1.4, dur + 0.05);
+      return s;
+    }
+    function kick(t, v) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+      g.gain.setValueAtTime(0.9 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+      o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 0.35);
+    }
+    function snare(t) {
+      var n = noiseSrc(t, 0.2), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      f.type = 'bandpass'; f.frequency.value = 1900; f.Q.value = 0.7;
+      g.gain.setValueAtTime(0.38, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      n.connect(f); f.connect(g); g.connect(musicBus);
+      var o = ctx.createOscillator(), og = ctx.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(200, t); o.frequency.exponentialRampToValueAtTime(120, t + 0.1);
+      og.gain.setValueAtTime(0.3, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      o.connect(og); og.connect(musicBus); o.start(t); o.stop(t + 0.14);
+    }
+    function hat(t, v) {
+      var n = noiseSrc(t, 0.05), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      f.type = 'highpass'; f.frequency.value = 7000;
+      g.gain.setValueAtTime(0.07 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      n.connect(f); f.connect(g); g.connect(musicBus);
+    }
+    function taiko(t) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(100, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.25);
+      g.gain.setValueAtTime(0.8, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+      o.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 0.95);
+      var n = noiseSrc(t, 0.5), f = ctx.createBiquadFilter(), ng = ctx.createGain();
+      f.type = 'lowpass'; f.frequency.value = 300;
+      ng.gain.setValueAtTime(0.3, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      n.connect(f); f.connect(ng); ng.connect(musicBus);
+    }
+    function bass(t, m, dur) {
+      var o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      o.type = 'sawtooth'; o.frequency.value = mtof(m);
+      f.type = 'lowpass'; f.frequency.value = 380; f.Q.value = 2;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(f); f.connect(g); g.connect(musicBus); o.start(t); o.stop(t + dur + 0.02);
+    }
+    function pad(t, notes, dur) {
+      var g = ctx.createGain(), f = ctx.createBiquadFilter();
+      f.type = 'lowpass'; f.frequency.value = 1000;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(1, t + 0.5);
+      g.gain.setValueAtTime(1, t + dur - 0.35);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      f.connect(g); g.connect(musicBus);
+      notes.forEach(function (m) {
+        [-7, 7].forEach(function (d) {
+          var o = ctx.createOscillator(), og = ctx.createGain();
+          o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = d;
+          og.gain.value = 0.02;
+          o.connect(og); og.connect(f); o.start(t); o.stop(t + dur + 0.05);
+        });
+      });
+    }
+    function lead(t, m, dur) {
+      var g = ctx.createGain(), f = ctx.createBiquadFilter();
+      f.type = 'lowpass'; f.Q.value = 1.5;
+      f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(2600, t + 0.12);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.075, t + 0.03);
+      g.gain.setValueAtTime(0.075, t + Math.max(0.04, dur - 0.08)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      f.connect(g); g.connect(musicBus); g.connect(delayIn);
+      [-8, 8].forEach(function (d) {
+        var o = ctx.createOscillator();
+        o.type = 'sawtooth'; o.frequency.value = mtof(m); o.detune.value = d;
+        o.connect(f); o.start(t); o.stop(t + dur + 0.05);
+      });
+    }
+    function schedStep(i, t) {
+      var bar = Math.floor(i / 16), s = i % 16;
+      if (s === 0 || s === 8) kick(t, 1);
+      if (s === 6 || s === 14) kick(t, 0.5);
+      if (s === 4 || s === 12) snare(t);
+      if (s % 2 === 0) hat(t, s % 4 === 2 ? 1 : 0.6);
+      if (s === 0 && bar % 4 === 0) taiko(t);
+      if (s % 2 === 0) bass(t, ROOTS[bar] + ((s === 6 || s === 14) ? 12 : 0), STEP * 1.8);
+      if (s === 0) pad(t, PADS[bar], STEP * 16);
+      if (LEAD[i]) lead(t, LEAD[i][1], LEAD[i][2] * STEP);
+    }
+    function tick() {
+      while (nextT < ctx.currentTime + 0.25) {
+        schedStep(step, nextT);
+        nextT += STEP; step = (step + 1) % 128;
+      }
+    }
+    function startMusic() {
+      if (!ctx || timer) return;
+      nextT = ctx.currentTime + 0.08;
+      timer = setInterval(tick, 40);
+    }
+    function stopMusic() { clearInterval(timer); timer = null; }
+
+    function init() {
+      if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      try { ctx = new AC(); } catch (e) { ctx = null; return; }
+      var comp = ctx.createDynamicsCompressor(); comp.connect(ctx.destination);
+      master = ctx.createGain(); master.gain.value = 0.9; master.connect(comp);
+      musicBus = ctx.createGain(); musicBus.gain.value = musicOn ? MUSIC_VOL : 0; musicBus.connect(master);
+      sfxBus = ctx.createGain(); sfxBus.gain.value = sfxOn ? 1 : 0; sfxBus.connect(master);
+      var dl = ctx.createDelay(1), fb = ctx.createGain(), wet = ctx.createGain();
+      dl.delayTime.value = 0.29; fb.gain.value = 0.28; wet.gain.value = 0.3;
+      dl.connect(fb); fb.connect(dl); dl.connect(wet); wet.connect(musicBus);
+      delayIn = dl;
+      var len = ctx.sampleRate * 2;
+      noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      var d = noiseBuf.getChannelData(0);
+      for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      if (musicOn) startMusic();
+    }
+    function setMusic(on) {
+      musicOn = on; save();
+      if (!ctx) return;
+      musicBus.gain.setTargetAtTime(on ? MUSIC_VOL : 0, ctx.currentTime, 0.1);
+      if (on) startMusic(); else stopMusic();
+    }
+    function setSfx(on) {
+      sfxOn = on; save();
+      if (ctx) sfxBus.gain.setTargetAtTime(on ? 1 : 0, ctx.currentTime, 0.02);
+    }
+    function duck(on) {
+      if (ctx && musicOn) musicBus.gain.setTargetAtTime(on ? MUSIC_VOL * 0.5 : MUSIC_VOL, ctx.currentTime, 0.2);
+    }
+
+    /* effects */
+    function whoosh(t) {
+      var n = noiseSrc(t, 0.2), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      f.type = 'bandpass'; f.Q.value = 1.2;
+      f.frequency.setValueAtTime(500, t); f.frequency.exponentialRampToValueAtTime(3500, t + 0.16);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.1); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+      n.connect(f); f.connect(g); g.connect(sfxBus);
+    }
+    function hit(t, v, pitch) {
+      pitch = pitch || 1;
+      var n = noiseSrc(t, 0.1), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      f.type = 'highpass'; f.frequency.value = 2500;
+      g.gain.setValueAtTime(0.55 * v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+      n.connect(f); f.connect(g); g.connect(sfxBus);
+      [1180, 1870, 2650, 3540, 5120].forEach(function (fr, k) {
+        var o = ctx.createOscillator(), og = ctx.createGain(), dec = 0.95 - k * 0.14;
+        o.type = 'sine'; o.frequency.value = fr * pitch;
+        og.gain.setValueAtTime(0.16 * v / Math.sqrt(k + 1), t); og.gain.exponentialRampToValueAtTime(0.0005, t + dec);
+        o.connect(og); og.connect(sfxBus); o.start(t); o.stop(t + dec + 0.05);
+      });
+    }
+    function clash() {
+      if (!ctx || !sfxOn) return;
+      var t = ctx.currentTime + 0.01;
+      whoosh(t); hit(t + 0.16, 1); hit(t + 0.31, 0.8, 1.12);
+    }
+    function note(type, m, t, dur, peak, lp) {
+      var o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+      o.type = type; o.frequency.value = mtof(m);
+      f.type = 'lowpass'; f.frequency.value = lp || 4000;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(f); f.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + dur + 0.05);
+    }
+    function good() { if (!ctx || !sfxOn) return; var t = ctx.currentTime + 0.01; note('sine', 79, t, 0.25, 0.22); note('sine', 86, t + 0.09, 0.35, 0.22); }
+    function bad() { if (!ctx || !sfxOn) return; var t = ctx.currentTime + 0.01; note('sawtooth', 52, t, 0.3, 0.16, 600); note('sawtooth', 49, t + 0.12, 0.35, 0.16, 500); }
+    function crumble() {
+      if (!ctx || !sfxOn) return;
+      var t = ctx.currentTime + 0.01;
+      var n = noiseSrc(t, 0.8), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      f.type = 'lowpass'; f.frequency.value = 500;
+      g.gain.setValueAtTime(0.7, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+      n.connect(f); f.connect(g); g.connect(sfxBus);
+      var o = ctx.createOscillator(), og = ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(32, t + 0.5);
+      og.gain.setValueAtTime(0.8, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+      o.connect(og); og.connect(sfxBus); o.start(t); o.stop(t + 0.6);
+    }
+    function win() {
+      if (!ctx || !sfxOn) return;
+      var t = ctx.currentTime + 0.05;
+      [62, 65, 69, 74].forEach(function (m, k) { note('triangle', m, t + k * 0.13, 0.5, 0.25); note('square', m + 12, t + k * 0.13, 0.3, 0.05, 2500); });
+      [62, 69, 74, 77].forEach(function (m) { note('triangle', m, t + 0.6, 1.4, 0.2); });
+    }
+    function lose() {
+      if (!ctx || !sfxOn) return;
+      var t = ctx.currentTime + 0.05;
+      [62, 58, 55, 50].forEach(function (m, k) { note('sawtooth', m, t + k * 0.26, 0.6, 0.14, 900); });
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (!ctx) return;
+      if (document.hidden) ctx.suspend(); else ctx.resume();
+    });
+    return {
+      init: init, setMusic: setMusic, setSfx: setSfx, duck: duck,
+      clash: clash, good: good, bad: bad, crumble: crumble, win: win, lose: lose,
+      get music() { return musicOn; }, get sfx() { return sfxOn; }
+    };
+  })();
+  ['pointerdown', 'keydown'].forEach(function (ev) {
+    document.addEventListener(ev, function () { Snd.init(); }, true);
+  });
+  function syncSoundButtons() {
+    $('musicBtn').setAttribute('aria-pressed', String(Snd.music));
+    $('musicBtn').textContent = 'Music: ' + (Snd.music ? 'on' : 'off');
+    $('sfxBtn').setAttribute('aria-pressed', String(Snd.sfx));
+    $('sfxBtn').textContent = 'Effects: ' + (Snd.sfx ? 'on' : 'off');
+  }
+  $('musicBtn').addEventListener('click', function () { Snd.setMusic(!Snd.music); syncSoundButtons(); });
+  $('sfxBtn').addEventListener('click', function () { Snd.setSfx(!Snd.sfx); syncSoundButtons(); });
+  syncSoundButtons();
+
+  /* ---------- Map data ---------- */
+  var TERR = {
+    canada: { p: '70,70 130,50 210,45 280,70 300,110 270,140 210,150 150,150 100,135 60,110' },
+    usa:    { p: '100,135 150,150 210,150 270,140 280,175 250,205 250,240 232,262 214,262 205,255 190,235 170,215 130,185 105,165' },
+    sam_n:  { p: '205,268 250,262 300,275 320,305 290,335 250,345 215,330 200,300' },
+    sam_s:  { p: '215,330 250,345 290,335 300,375 275,430 250,480 232,490 225,440 210,390' },
+    green:  { p: '320,40 370,35 400,55 385,95 345,110 320,85' },
+    europe: { p: '440,95 480,75 530,70 560,95 555,135 530,160 490,165 455,150 440,125' },
+    asia_n: { p: '530,70 580,55 680,45 780,55 840,80 830,120 760,135 690,135 620,140 555,135 560,95' },
+    asia_m: { p: '555,135 620,140 690,135 700,175 680,215 640,232 605,215 565,185 530,160' },
+    asia_e: { p: '690,135 760,135 830,120 850,160 820,215 780,250 750,285 725,250 700,225 680,215 700,175' },
+    af_n:   { p: '450,205 490,185 530,185 575,208 605,242 590,268 540,278 490,278 450,268 435,238' },
+    af_s:   { p: '490,278 540,278 590,268 610,312 590,372 555,420 525,430 505,385 490,332 480,297' },
+    aus:    { p: '740,360 800,345 860,365 880,410 850,445 790,450 750,425 735,390' }
+  };
+  var TIDS = Object.keys(TERR);
+  var LINKS = [
+    ['canada', 'usa'], ['sam_n', 'sam_s'], ['europe', 'asia_n'], ['europe', 'asia_m'], ['asia_n', 'asia_m'],
+    ['asia_n', 'asia_e'], ['asia_m', 'asia_e'], ['af_n', 'af_s'], ['asia_m', 'af_n'], ['usa', 'sam_n'],
+    ['europe', 'af_n', 1], ['green', 'canada', 1], ['green', 'europe', 1], ['sam_n', 'af_n', 1], ['sam_s', 'af_s', 1], ['asia_e', 'aus', 1]
+  ];
+  var ADJ = {};
+  TIDS.forEach(function (id) { ADJ[id] = []; });
+  LINKS.forEach(function (l) { ADJ[l[0]].push(l[1]); ADJ[l[1]].push(l[0]); });
+
+  // Organic outlines: every edge is subdivided and nudged by a hash of its endpoints,
+  // so two territories sharing an edge get the identical wobbly border.
+  function hash(x, y) { var s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); }
+  function edgePts(a, b) {
+    var rev = (a[0] > b[0]) || (a[0] === b[0] && a[1] > b[1]);
+    var p = rev ? b : a, q = rev ? a : b;
+    var dx = q[0] - p[0], dy = q[1] - p[1], len = Math.sqrt(dx * dx + dy * dy);
+    var n = Math.max(1, Math.round(len / 15));
+    var nx = -dy / len, ny = dx / len, amp = Math.min(7, len * 0.12), pts = [];
+    for (var k = 1; k < n; k++) {
+      var t = k / n, h = hash(p[0] + k * 7.3, p[1] + q[0] * 0.37 + k) * 2 - 1, off = amp * Math.sin(Math.PI * t) * h;
+      pts.push([p[0] + dx * t + nx * off, p[1] + dy * t + ny * off]);
+    }
+    return rev ? pts.reverse() : pts;
+  }
+  function outline(str) {
+    var v = str.split(' ').map(function (s) { return s.split(',').map(Number); }), pts = [];
+    for (var i = 0; i < v.length; i++) {
+      pts.push(v[i]);
+      edgePts(v[i], v[(i + 1) % v.length]).forEach(function (q) { pts.push(q); });
+    }
+    return { v: v, pts: pts };
+  }
+  function pathOf(pts) {
+    function mid(a, b) { return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; }
+    var n = pts.length, m0 = mid(pts[n - 1], pts[0]);
+    var d = 'M' + m0[0].toFixed(1) + ' ' + m0[1].toFixed(1);
+    for (var i = 0; i < n; i++) {
+      var c = pts[i], m = mid(pts[i], pts[(i + 1) % n]);
+      d += 'Q' + c[0].toFixed(1) + ' ' + c[1].toFixed(1) + ' ' + m[0].toFixed(1) + ' ' + m[1].toFixed(1);
+    }
+    return d + 'Z';
+  }
+  TIDS.forEach(function (id) {
+    var o = outline(TERR[id].p), v = o.v;
+    TERR[id].d = pathOf(o.pts);
+    TERR[id].c = [
+      v.reduce(function (s, q) { return s + q[0]; }, 0) / v.length,
+      v.reduce(function (s, q) { return s + q[1]; }, 0) / v.length
+    ];
+  });
+
+  /* ---------- Questions (draft bank, 20 categories, for review) ---------- */
+  // Each category: c = name, m = [question, correct, wrong, wrong, wrong], n = [question, answer, unit, typical error, isYear]
+  var BANK = /*BANK*/;
+  // Category-balanced drawing: shuffled bag of categories, then a shuffled bag of questions inside each one
+  var catBag = { m: [], n: [] }, qBag = { m: {}, n: {} };
+  function nextCat(k) {
+    var guard = 0;
+    for (;;) {
+      if (!catBag[k].length) catBag[k] = shuffle(BANK.map(function (_, i) { return i; }));
+      var ci = catBag[k].pop();
+      if (BANK[ci][k].length || ++guard > 40) return ci;
+    }
+  }
+  function nextQ(k) {
+    var ci = nextCat(k), bag = qBag[k][ci];
+    if (!bag || !bag.length) bag = qBag[k][ci] = shuffle(BANK[ci][k]);
+    return { r: bag.pop(), c: BANK[ci].c };
+  }
+  function drawMCQ() {
+    var d = nextQ('m'), r = d.r;
+    var opts = shuffle(r.slice(1));
+    return { q: r[0], o: opts, a: opts.indexOf(r[1]), c: d.c };
+  }
+  function drawNum() {
+    var d = nextQ('n'), r = d.r;
+    return { q: r[0], a: r[1], u: r[2], t: r[3], y: !!r[4], c: d.c };
+  }
+  function guessRound(v, a) {
+    if (a === Math.round(a)) return Math.round(v);
+    var p = Math.abs(a) < 10 ? 100 : 10;
+    return Math.round(v * p) / p;
+  }
+
+  /* ---------- Async plumbing (restart-safe) ---------- */
+  var ABORT = { abort: true };
+  var epoch = 0;
+  var pend = [];
+  function waitFor(setup) {
+    var e = epoch;
+    return new Promise(function (res, rej) {
+      var done = function (v) {
+        var i = pend.indexOf(done); if (i >= 0) pend.splice(i, 1);
+        if (e !== epoch) rej(ABORT); else res(v);
+      };
+      pend.push(done);
+      setup(done);
+    });
+  }
+  function sleep(ms) { return waitFor(function (done) { setTimeout(done, ms); }); }
+
+  /* ---------- State ---------- */
+  var COL = [{ k: 'red', n: 'Red' }, { k: 'blue', n: 'Blue' }, { k: 'green', n: 'Green' }];
+  var P = [], own = {}, active = null, pending = null, tIv = null;
+  var TL_MCQ = 20, TL_NUM = 30, TURNS = 5, CASTLE_PTS = 1000, LAND_PTS = 300;
+
+  function newGame() {
+    var h = rnd(3);
+    var names = shuffle(['Fatima', 'Khaled', 'Layla', 'Omar', 'Salma', 'Youssef', 'Huda', 'Karim']);
+    P = COL.map(function (c, i) {
+      return { i: i, k: c.k, cn: c.n, human: i === h, name: i === h ? 'You' : names.pop(), towers: 3, base: null, alive: true, skill: 0.55 + Math.random() * 0.2 };
+    });
+    own = {}; TIDS.forEach(function (id) { own[id] = null; });
+    active = null;
+  }
+  function tag(i) { return '<span class="tag" style="--pc:var(--' + P[i].k + ')">' + P[i].name + '</span>'; }
+  function freeIds() { return TIDS.filter(function (id) { return own[id] === null; }); }
+  function ownedBy(i) { return TIDS.filter(function (id) { return own[id] === i; }); }
+  function isCastle(id) { return P.some(function (p) { return p.base === id; }); }
+  function score(i) {
+    return ownedBy(i).reduce(function (s, id) { return s + (isCastle(id) ? CASTLE_PTS : LAND_PTS); }, 0);
+  }
+  function freeAdj(i) {
+    var mine = ownedBy(i);
+    return freeIds().filter(function (id) { return ADJ[id].some(function (n) { return mine.indexOf(n) >= 0; }); });
+  }
+  function enemyTargets(i) {
+    var mine = ownedBy(i);
+    return TIDS.filter(function (id) { return own[id] !== null && own[id] !== i && ADJ[id].some(function (n) { return mine.indexOf(n) >= 0; }); });
+  }
+
+  /* ---------- Rendering ---------- */
+  var svg = $('map'), polys = {};
+  (function buildMap() {
+    var waves = [[30, 150], [60, 360], [120, 505], [330, 160], [400, 235], [420, 440], [650, 405], [700, 485], [900, 300], [930, 470], [955, 100], [25, 45], [480, 30], [375, 385], [620, 22], [170, 300], [560, 480], [880, 40]];
+    var ships = [[55, 300, 1], [385, 300, -1], [665, 330, 1], [930, 235, -1], [500, 475, 1], [110, 425, -1]];
+    var h = '<defs>' +
+      '<radialGradient id="parch" cx="50%" cy="48%" r="75%"><stop offset="0" stop-color="#f0dfb4"/><stop offset=".7" stop-color="#e2c78f"/><stop offset="1" stop-color="#c79f62"/></radialGradient>' +
+      '<filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="2" seed="4"/>' +
+      '<feColorMatrix values="0 0 0 0 .35  0 0 0 0 .22  0 0 0 0 .1  .9 0 0 0 -.28"/></filter>' +
+      '<pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><line x1="0" y1="0" x2="0" y2="7" stroke="#5a3a14" stroke-width="1" opacity=".2"/></pattern>' +
+      '<radialGradient id="shade" cx="50%" cy="50%" r="70%"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#3a2213" stop-opacity=".35"/></radialGradient>' +
+      '</defs>' +
+      '<rect width="1000" height="520" fill="url(#parch)"/><rect width="1000" height="520" fill="#000" filter="url(#grain)"/>';
+    // ocean decoration
+    h += '<g fill="none" stroke="#8f6d38" stroke-width="1.6" stroke-linecap="round" opacity=".45">' + waves.map(function (w) {
+      return '<path d="M' + w[0] + ' ' + w[1] + ' q5 -6 10 0 t10 0 t10 0"/><path d="M' + (w[0] + 8) + ' ' + (w[1] + 9) + ' q4 -5 8 0 t8 0"/>';
+    }).join('') + '</g>';
+    h += '<g>' + ships.map(function (s) {
+      return '<g transform="translate(' + s[0] + ',' + s[1] + ') scale(' + s[2] * 0.9 + ',0.9)" opacity=".85">' +
+        '<path d="M-14 6 L14 6 L9 14 L-9 14Z" fill="#6b4423" stroke="#2b1a0d" stroke-width="1.5"/>' +
+        '<path d="M0 5 L0 -18" stroke="#2b1a0d" stroke-width="1.8"/>' +
+        '<path d="M1 -16 L1 3 L15 3Z" fill="#f6ead0" stroke="#2b1a0d" stroke-width="1.3"/>' +
+        '<path d="M-1 -12 L-1 3 L-11 3Z" fill="#efdcae" stroke="#2b1a0d" stroke-width="1.3"/></g>';
+    }).join('') + '</g>';
+    // compass rose
+    h += '<g transform="translate(92,438)" opacity=".6"><circle r="36" fill="none" stroke="#7b5a2a" stroke-width="2"/><circle r="28" fill="none" stroke="#7b5a2a" stroke-width="1"/>' +
+      '<path d="M0 -50 L7 -7 L50 0 L7 7 L0 50 L-7 7 L-50 0 L-7 -7Z" fill="#a47c3c" stroke="#5a3a14" stroke-width="1.5"/>' +
+      '<path d="M0 -30 L4 -4 L30 0 L4 4 L0 30 L-4 4 L-30 0 L-4 -4Z" fill="#d8b36f" stroke="#5a3a14" stroke-width="1" transform="rotate(45)"/>' +
+      '<text y="-56" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-weight="700" font-size="16" fill="#5a3a14">N</text></g>';
+    // sea routes
+    h += '<g>' + LINKS.filter(function (l) { return l[2]; }).map(function (l) {
+      var a = TERR[l[0]].c, b = TERR[l[1]].c;
+      return '<line x1="' + a[0] + '" y1="' + a[1] + '" x2="' + b[0] + '" y2="' + b[1] + '" stroke="#8c6a38" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>';
+    }).join('') + '</g>';
+    // shallow-water halo, then a land base that hides any seam between neighbours
+    h += '<g fill="none" stroke="#a9823f" stroke-width="16" stroke-linejoin="round" opacity=".28">' + TIDS.map(function (id) { return '<path d="' + TERR[id].d + '"/>'; }).join('') + '</g>';
+    h += '<g fill="var(--land)" stroke="var(--land)" stroke-width="4" stroke-linejoin="round">' + TIDS.map(function (id) { return '<path d="' + TERR[id].d + '"/>'; }).join('') + '</g>';
+    h += '<g>' + TIDS.map(function (id) { return '<path class="terr" data-id="' + id + '" d="' + TERR[id].d + '"/>'; }).join('') + '</g>';
+    // engraved texture and edge shading on top of the land
+    h += '<g pointer-events="none">' + TIDS.map(function (id) { return '<path d="' + TERR[id].d + '" fill="url(#hatch)"/>'; }).join('') + '</g>';
+    h += '<g id="marks"></g>';
+    // map frame and vignette
+    h += '<rect width="1000" height="520" fill="url(#shade)" pointer-events="none"/>' +
+      '<rect x="8" y="8" width="984" height="504" fill="none" stroke="#6b4a1e" stroke-width="3" opacity=".7" pointer-events="none"/>' +
+      '<rect x="15" y="15" width="970" height="490" fill="none" stroke="#6b4a1e" stroke-width="1" opacity=".6" pointer-events="none"/>';
+    svg.innerHTML = h;
+    TIDS.forEach(function (id) {
+      var el = svg.querySelector('[data-id="' + id + '"]');
+      polys[id] = el;
+      el.addEventListener('click', function () { if (pending && pending.cands.indexOf(id) >= 0) pending.done(id); });
+      el.addEventListener('keydown', function (ev) {
+        if ((ev.key === 'Enter' || ev.key === ' ') && pending && pending.cands.indexOf(id) >= 0) { ev.preventDefault(); pending.done(id); }
+      });
+    });
+  })();
+
+  function castleSVG(cx, cy, k, t) {
+    var col = 'var(--' + k + ')', s = '<g transform="translate(' + cx.toFixed(1) + ',' + (cy - 8).toFixed(1) + ') scale(1.1)">';
+    s += '<ellipse cy="28" rx="36" ry="6" fill="rgba(42,26,14,.28)"/>';
+    s += '<rect x="-27" y="8" width="54" height="20" fill="#d9c496" stroke="#2b1a0d" stroke-width="2"/>';
+    s += '<path d="M-7 28 v-8 a7 7 0 0 1 14 0 v8z" fill="#3a2213"/>';
+    [-22, 0, 22].forEach(function (x, idx) {
+      if (idx < t) {
+        s += '<rect x="' + (x - 8) + '" y="-16" width="16" height="44" fill="' + col + '" stroke="#2b1a0d" stroke-width="2"/>';
+        s += '<rect x="' + (x - 9) + '" y="-22" width="5" height="7" fill="' + col + '" stroke="#2b1a0d" stroke-width="1.5"/>';
+        s += '<rect x="' + (x - 2.5) + '" y="-22" width="5" height="7" fill="' + col + '" stroke="#2b1a0d" stroke-width="1.5"/>';
+        s += '<rect x="' + (x + 4) + '" y="-22" width="5" height="7" fill="' + col + '" stroke="#2b1a0d" stroke-width="1.5"/>';
+        s += '<rect x="' + (x - 3) + '" y="-8" width="6" height="9" rx="3" fill="#2b1a0d"/>';
+      } else {
+        s += '<path d="M' + (x - 9) + ' 28 L' + (x - 9) + ' 15 L' + (x - 4) + ' 10 L' + x + ' 16 L' + (x + 5) + ' 9 L' + (x + 9) + ' 15 L' + (x + 9) + ' 28Z" fill="#8c8478" stroke="#2b1a0d" stroke-width="2"/>';
+      }
+    });
+    return s + '</g>';
+  }
+  function soldierSVG(cx, cy, k) {
+    var col = 'var(--' + k + ')';
+    return '<g transform="translate(' + cx.toFixed(1) + ',' + cy.toFixed(1) + ') scale(1.3)">' +
+      '<ellipse cy="15" rx="11" ry="3" fill="rgba(42,26,14,.28)"/>' +
+      '<path d="M-9 13 L-7 -2 Q0 -6 7 -2 L9 13Z" fill="' + col + '" stroke="#2b1a0d" stroke-width="1.5"/>' +
+      '<circle cy="-9" r="6" fill="#f0cf9d" stroke="#2b1a0d" stroke-width="1.5"/>' +
+      '<path d="M-7 -11 Q0 -20 7 -11 Q0 -8 -7 -11Z" fill="#f6ead0" stroke="#2b1a0d" stroke-width="1.5"/></g>';
+  }
+  function renderMap() {
+    var m = '';
+    TIDS.forEach(function (id) {
+      var el = polys[id], o = own[id];
+      el.classList.remove('o0', 'o1', 'o2');
+      if (o !== null) el.classList.add('o' + o);
+      if (o === null) return;
+      var c = TERR[id].c;
+      if (P[o].base === id && P[o].alive) m += castleSVG(c[0], c[1], P[o].k, P[o].towers);
+      else m += soldierSVG(c[0], c[1], P[o].k);
+    });
+    $('marks').innerHTML = m;
+  }
+  function renderCards() {
+    $('players').innerHTML = P.map(function (p) {
+      var n = ownedBy(p.i).length;
+      var tw = [0, 1, 2].map(function (k) { return '<i class="tw' + (k < p.towers ? '' : ' off') + '"></i>'; }).join('');
+      return '<div class="pcard' + (p.alive ? '' : ' dead') + (active === p.i ? ' active' : '') + '" style="--pc:var(--' + p.k + ')" title="' + n + ' of 12 territories">' +
+        '<span class="avatar">' + p.name.charAt(0) + '</span><div class="pinfo"><div class="pname">' + p.name + '</div>' +
+        '<div class="pmeta"><span class="score">' + fmt(score(p.i)) + ' pts</span><span class="towers" title="Castle towers">' + tw + '</span></div></div></div>';
+    }).join('');
+  }
+  function renderAll() { renderMap(); renderCards(); }
+  function setActive(i) { active = i; renderCards(); $('pwho').innerHTML = i === null ? '' : tag(i); }
+  function setPhase(title, counter) { $('ptitle').textContent = title; $('pcount').textContent = counter || ''; }
+  function setHint(h) { var el = $('hint'); el.textContent = h || ''; el.hidden = !h; }
+  function clearPick() {
+    pending = null;
+    setHint('');
+    $('actions').hidden = true;
+    TIDS.forEach(function (id) {
+      polys[id].classList.remove('pick');
+      polys[id].removeAttribute('tabindex'); polys[id].removeAttribute('role');
+    });
+  }
+  function flash(id) { polys[id].classList.add('target'); setTimeout(function () { polys[id].classList.remove('target'); }, 1600); }
+
+  function pickTerritory(pi, cands, msg, canRepair) {
+    if (!P[pi].human) { return sleep(900).then(function () { return cands[rnd(cands.length)]; }); }
+    setHint(msg);
+    return waitFor(function (done) {
+      pending = { cands: cands, done: done };
+      if (canRepair) $('actions').hidden = false;
+      cands.forEach(function (id) {
+        polys[id].classList.add('pick'); polys[id].setAttribute('tabindex', '0'); polys[id].setAttribute('role', 'button');
+      });
+    }).then(function (v) { clearPick(); return v; }, function (e) { clearPick(); throw e; });
+  }
+
+  /* ---------- Question card (stacked over the map) ---------- */
+  function openPanel(kind, parts, cat) {
+    $('qkind').textContent = kind + (cat ? ' \u00b7 ' + cat : '');
+    $('qwho').innerHTML = parts.map(tag).join(' ');
+    $('qnote').textContent = ''; $('chips').innerHTML = '';
+    $('qwrap').hidden = false;
+    Snd.duck(true);
+    $('qwrap').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function closePanel() { clearInterval(tIv); $('qwrap').hidden = true; Snd.duck(false); }
+  function startTimer(done, sec, val) {
+    var e = epoch, t0 = performance.now(), bar = $('tbar');
+    clearInterval(tIv);
+    bar.style.width = '100%';
+    tIv = setInterval(function () {
+      if (e !== epoch) { clearInterval(tIv); return; }
+      var f = 1 - (performance.now() - t0) / (sec * 1000);
+      bar.style.width = Math.max(0, f * 100) + '%';
+      if (f <= 0) { clearInterval(tIv); done(val); }
+    }, 100);
+  }
+  function chips(parts, ok, extra) {
+    $('chips').innerHTML = parts.map(function (i) {
+      return '<span class="chip ' + (ok[i] ? 'ok' : 'no') + '" style="--pc:var(--' + P[i].k + ')">' + P[i].name + (extra && extra[i] ? ' · ' + extra[i] : '') + '</span>';
+    }).join('');
+  }
+
+  // Multiple choice for the listed players. Returns {playerIndex: correct?}
+  async function mcq(parts, label) {
+    var q = drawMCQ(), res = {}, picks = {};
+    parts.forEach(function (i) {
+      if (P[i].human) return;
+      res[i] = Math.random() < P[i].skill;
+      if (res[i]) picks[i] = q.a;
+      else {
+        var wrong = [0, 1, 2, 3].filter(function (k) { return k !== q.a; });
+        picks[i] = wrong[rnd(wrong.length)];
+      }
+    });
+    var h = parts.filter(function (i) { return P[i].human; })[0];
+    openPanel(label, parts, q.c);
+    $('qtext').textContent = q.q;
+    $('numrow').hidden = true;
+    var box = $('opts'); box.hidden = false; box.innerHTML = '';
+    var btns = q.o.map(function (t) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.textContent = t; box.appendChild(b); return b;
+    });
+    var choice = -1;
+    try {
+      if (h !== undefined) {
+        choice = await waitFor(function (done) {
+          btns.forEach(function (b, k) { b.onclick = function () { done(k); }; });
+          startTimer(done, TL_MCQ, -1);
+        });
+      } else {
+        // bots only: the players "think" while the timer runs, then answers are revealed
+        btns.forEach(function (b) { b.disabled = true; });
+        await waitFor(function (done) { startTimer(done, 2.6, 0); });
+      }
+    } finally { clearInterval(tIv); }
+    btns.forEach(function (b) { b.disabled = true; });
+    btns[q.a].classList.add('right');
+    if (h !== undefined) {
+      picks[h] = choice;
+      res[h] = choice === q.a;
+      if (choice >= 0 && choice !== q.a) btns[choice].classList.add('wrong');
+    }
+    parts.forEach(function (i) {
+      if (picks[i] === undefined || picks[i] < 0) return;
+      if (picks[i] !== q.a) btns[picks[i]].classList.add('wrong');
+      var w = btns[picks[i]].querySelector('.who');
+      if (!w) { w = document.createElement('span'); w.className = 'who'; btns[picks[i]].appendChild(w); }
+      w.insertAdjacentHTML('beforeend', '<i style="--pc:var(--' + P[i].k + ')">' + P[i].name + '</i>');
+    });
+    if (h !== undefined) { if (res[h]) Snd.good(); else Snd.bad(); }
+    $('qnote').textContent = (h !== undefined && choice === -1) ? 'Time is up' : '';
+    chips(parts, res);
+    await sleep(h === undefined ? 3000 : 2600);
+    closePanel();
+    return res;
+  }
+
+  // Numeric question. Returns {winner: index, or null on a tie}
+  async function numeric(parts, label) {
+    var q = drawNum(), g = {};
+    parts.forEach(function (i) {
+      if (!P[i].human) g[i] = guessRound(q.a + (Math.random() * 2 - 1) * q.t * (1.25 - P[i].skill) * 1.6, q.a);
+    });
+    var h = parts.filter(function (i) { return P[i].human; })[0];
+    openPanel(label, parts, q.c);
+    $('qtext').textContent = q.q + (q.u ? ' (' + q.u + ')' : '');
+    $('opts').hidden = true;
+    var form = $('numrow'), inp = $('numin');
+    if (h !== undefined) {
+      form.hidden = false; inp.value = ''; inp.disabled = false; $('numgo').disabled = false;
+      try { inp.focus({ preventScroll: true }); } catch (e) { }
+      var v;
+      try {
+        v = await waitFor(function (done) {
+          form.onsubmit = function (ev) { ev.preventDefault(); var n = parseNum(inp.value); if (n !== null) done(n); };
+          startTimer(done, TL_NUM, null);
+        });
+      } finally { clearInterval(tIv); }
+      inp.disabled = true; $('numgo').disabled = true;
+      if (v !== null) g[h] = v;
+    } else {
+      // bots only: show the question while they "think", then reveal every guess
+      form.hidden = true;
+      try { await waitFor(function (done) { startTimer(done, 2.6, 0); }); } finally { clearInterval(tIv); }
+    }
+    function dist(i) { return g[i] === undefined ? Infinity : Math.abs(g[i] - q.a); }
+    var best = Math.min.apply(null, parts.map(dist));
+    var wins = parts.filter(function (i) { return dist(i) === best; });
+    var winner = (wins.length === 1 && best !== Infinity) ? wins[0] : null;
+    var ok = {}, ex = {};
+    parts.forEach(function (i) { ok[i] = i === winner; ex[i] = g[i] === undefined ? 'no answer' : fmt(g[i], q.y); });
+    if (h !== undefined) { if (winner === h) Snd.good(); else Snd.bad(); }
+    $('qnote').textContent = 'Correct answer: ' + fmt(q.a, q.y) + (q.u ? ' ' + q.u : '');
+    chips(parts, ok, ex);
+    await sleep(h === undefined ? 3400 : 3000);
+    closePanel();
+    return { winner: winner };
+  }
+
+  // Head-to-head: returns the winner's index, or null when both miss
+  async function duel(a, d, label) {
+    var r = await mcq([a, d], label);
+    if (r[a] && !r[d]) return a;
+    if (!r[a] && r[d]) return d;
+    if (!r[a] && !r[d]) return null;
+    for (;;) {
+      await sleep(500);
+      var n = await numeric([a, d], 'Tiebreaker');
+      if (n.winner !== null) return n.winner;
+      await sleep(500);
+    }
+  }
+
+  /* ---------- Overlay ---------- */
+  function showOverlay(html) { $('ocard').innerHTML = html; $('overlay').hidden = false; }
+  function hideOverlay() { $('overlay').hidden = true; }
+  function scoreRows() {
+    return '<ul class="slots">' + P.map(function (p) { return { p: p, s: score(p.i) }; })
+      .sort(function (a, b) { return b.s - a.s; })
+      .map(function (r) {
+        return '<li class="slot on" style="--pc:var(--' + r.p.k + ')"><span class="dot"></span>' + r.p.cn + ' (' + r.p.name + '): ' + fmt(r.s) + ' pts</li>';
+      }).join('') + '</ul>';
+  }
+  function showResult(title, text, win) {
+    showOverlay('<h2 class="otitle">' + title + '</h2><p>' + text + '</p>' + scoreRows() + '<button class="btn" id="again" type="button">New game</button>');
+    $('again').onclick = restart;
+    if (win) Snd.win(); else Snd.lose();
+  }
+
+  async function lobby() {
+    newGame(); renderAll(); setPhase('Lobby', '');
+    showOverlay('<h2 class="otitle">Sword of Knowledge</h2><p>Three players, twelve territories, and a question decides every fight. Sound on for the full experience.</p><button class="btn" id="goBtn" type="button">Find opponents</button>');
+    await waitFor(function (done) { $('goBtn').onclick = function () { Snd.init(); done(1); }; });
+    showOverlay('<h2 class="otitle">Matching players</h2><ul class="slots" id="slots">' +
+      [0, 1, 2].map(function () { return '<li class="slot">Searching for a player…</li>'; }).join('') +
+      '</ul><div id="goWrap"></div>');
+    var order = shuffle([0, 1, 2]);
+    for (var k = 0; k < order.length; k++) {
+      await sleep(700 + rnd(500));
+      var i = order[k], li = $('slots').children[i];
+      li.style.setProperty('--pc', 'var(--' + P[i].k + ')');
+      li.className = 'slot on';
+      li.innerHTML = '<span class="dot"></span>' + P[i].cn + ' — ' + P[i].name;
+    }
+    await sleep(500);
+    $('goWrap').innerHTML = '<button class="btn" id="go2" type="button">Enter the game</button>';
+    await waitFor(function (done) { $('go2').onclick = function () { done(1); }; });
+    hideOverlay();
+  }
+
+  /* ---------- Game phases ---------- */
+  async function setupBases() {
+    setPhase('Base selection', 'Place your castles');
+    for (var i = 0; i < 3; i++) {
+      setActive(i);
+      var t = await pickTerritory(i, freeIds(), 'Pick the territory for your castle');
+      own[t] = i; P[i].base = t; renderAll();
+      await sleep(900);
+    }
+  }
+  async function takeFree(p) {
+    var c = freeAdj(p);
+    if (!c.length) c = freeIds();
+    setActive(p);
+    var t = await pickTerritory(p, c, 'Correct! Pick a free territory next to yours');
+    own[t] = p; renderAll();
+    await sleep(900);
+  }
+  async function claimPhase() {
+    var round = 0;
+    setActive(null);
+    while (freeIds().length > 0) {
+      var order = [0, 1, 2].map(function (k) { return (k + round) % 3; });
+      var fr = freeIds().length;
+      setActive(null);
+      setPhase('Claim phase', 'Round ' + (round + 1) + ' \u00b7 ' + fr + ' free');
+      await sleep(900);
+      if (fr < 3) {
+        var n;
+        do {
+          n = await numeric([0, 1, 2], 'Number question');
+          if (n.winner === null) await sleep(500);
+        } while (n.winner === null);
+        await takeFree(n.winner);
+      } else {
+        var r = await mcq([0, 1, 2], 'Claim question');
+        var any = false;
+        for (var k = 0; k < order.length; k++) {
+          var p = order[k];
+          if (r[p] && freeIds().length) { any = true; await takeFree(p); }
+        }
+        if (!any) await sleep(600);
+      }
+      round++;
+    }
+    await sleep(900);
+  }
+  async function repair(p) {
+    setActive(p);
+    await sleep(600);
+    while (P[p].towers < 3) {
+      var r = await mcq([p], 'Castle repair');
+      if (r[p]) {
+        P[p].towers++; renderAll();
+        await sleep(800);
+      } else {
+        await sleep(600);
+        break;
+      }
+    }
+  }
+  function capture(a, d) {
+    TIDS.forEach(function (id) { if (own[id] === d) own[id] = a; });
+    P[d].alive = false; P[d].towers = 0;
+  }
+  function endCheck() {
+    var human = P.filter(function (p) { return p.human; })[0];
+    if (!human.alive) {
+      showResult('Your kingdom has fallen', 'An opponent took your castle and every territory you held.', false);
+      return true;
+    }
+    if (P.filter(function (p) { return p.alive; }).length === 1) {
+      showResult('You rule the world!', 'Both rival castles have fallen, so the whole map is yours.', true);
+      return true;
+    }
+    return false;
+  }
+  function finish() {
+    var s = P.map(function (p) { return { p: p, s: score(p.i) }; }).sort(function (a, b) { return b.s - a.s; });
+    var human = P.filter(function (p) { return p.human; })[0];
+    setPhase('Final scores', '');
+    if (s[0].s === s[1].s) showResult("It's a tie!", 'The top two players finished on the same score.', false);
+    else if (s[0].p === human) showResult('You win!', 'You finished with the highest score.', true);
+    else showResult(s[0].p.cn + ' (' + s[0].p.name + ') wins', 'The highest score takes the crown. Better luck next time!', false);
+  }
+  async function takeTurn(p) {
+    setActive(p);
+    var targets = enemyTargets(p), damaged = P[p].towers < 3, t;
+    if (!targets.length) {
+      // nothing to attack from here: a damaged castle is repaired, otherwise the turn passes
+      if (damaged) await repair(p); else await sleep(900);
+      return;
+    }
+    if (P[p].human) {
+      t = await pickTerritory(p, targets, damaged ? 'Your turn: attack a neighboring territory, or repair your castle' : 'Your turn to attack: pick an enemy territory next to yours', damaged);
+      if (t === '__repair') { await repair(p); return; }
+    } else {
+      if (damaged && Math.random() < 0.4) { await sleep(900); await repair(p); return; }
+      var weak = targets.filter(function (id) { return P[own[id]].base === id && P[own[id]].towers < 3; });
+      t = (weak.length && Math.random() < 0.5) ? weak[rnd(weak.length)] : targets[rnd(targets.length)];
+      await sleep(1000);
+    }
+    var d = own[t];
+    var isBase = P[d].base === t && P[d].alive;
+    flash(t);
+    Snd.clash();
+    await sleep(1300);
+    if (!isBase) {
+      var w = await duel(p, d, 'Battle');
+      if (w === p) { own[t] = p; Snd.clash(); }
+      renderAll();
+      await sleep(1200);
+    } else {
+      while (P[d].towers > 0) {
+        var cw = await duel(p, d, 'Castle siege: tower ' + (4 - P[d].towers) + ' of 3');
+        if (cw === p) {
+          P[d].towers--; renderAll(); Snd.crumble();
+          if (P[d].towers > 0) await sleep(1000);
+        } else {
+          await sleep(900);
+          break;
+        }
+      }
+      if (P[d].towers === 0) {
+        capture(p, d); renderAll(); Snd.clash();
+        await sleep(1800);
+      }
+    }
+    renderAll();
+  }
+  async function battlePhase() {
+    for (var round = 1; round <= TURNS; round++) {
+      setPhase('Battle phase', 'Turn ' + round + ' of ' + TURNS);
+      setActive(null);
+      await sleep(1000);
+      for (var p = 0; p < 3; p++) {
+        if (!P[p].alive) continue;
+        setPhase('Battle phase', 'Turn ' + round + ' of ' + TURNS);
+        await takeTurn(p);
+        if (endCheck()) return;
+      }
+    }
+    setActive(null);
+    finish();
+  }
+
+  async function run() {
+    try {
+      await lobby();
+      await setupBases();
+      await claimPhase();
+      await battlePhase();
+    } catch (e) {
+      if (e !== ABORT) { console.error(e); }
+    }
+  }
+  function restart() {
+    epoch++;
+    var fns = pend.slice(); pend = [];
+    fns.forEach(function (f) { f(); });
+    clearInterval(tIv); closePanel(); clearPick(); hideOverlay();
+    run();
+  }
+  $('repairBtn').addEventListener('click', function () { if (pending) pending.done('__repair'); });
+  $('restartBtn').addEventListener('click', restart);
+  run();
+})();
+</script>
+
+</body>
+</html>
